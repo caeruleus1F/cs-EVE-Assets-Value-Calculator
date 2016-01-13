@@ -303,8 +303,8 @@ namespace cs_EVE_Assets_Value_Calculator
 
         private void GetUniqueItemValuesFromJitaBuyMax()
         {
-            Display("Retrieving price data from EVE-Central.");
             List<string> uris = AssembleURIs();
+            Display("Retrieving price data from EVE-Central.");
             int requests = uris.Count;
             System.Net.WebClient[] w = new System.Net.WebClient[requests];
 
@@ -524,12 +524,6 @@ namespace cs_EVE_Assets_Value_Calculator
             }
             uris.Add(sb.ToString());
             sb.Clear();
-
-            int typeids = 0;
-            foreach (string uri in uris)
-            {
-                typeids += uri.Split('=')[2].Split(',').Length;
-            }
 
             return uris;
         }
