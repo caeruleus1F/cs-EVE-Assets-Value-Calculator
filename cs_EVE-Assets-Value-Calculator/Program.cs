@@ -67,17 +67,17 @@ namespace cs_EVE_Assets_Value_Calculator
         static void Start()
         {
             _lastattempt = DateTime.Now;
-            Thread t = new Thread(new ThreadStart(new Program().Begin));
+            Thread t = new Thread(new Program().Begin);
             t.IsBackground = true;
             t.Start();
             t.Join();
+
             Console.Clear();
             Console.WriteLine("Data retrieved.\nNext pull at {0}", _lastattempt.AddHours(1).ToLongTimeString());
         }
 
         public void Begin()
         {
-            Display("Pulling data.");
             HardcodeAccountInfo();
             GetAccountXML();
             GetTotalCharacters();
@@ -88,7 +88,7 @@ namespace cs_EVE_Assets_Value_Calculator
             GetContractContents();
             
             GetUniqueTypeIDsCount();
-            GetUniqueItemValuesFromJitaBuyMax();
+            GetItemValuesFromEVECentral();
             ProcessEVECentralMarketStatResponses();
             DisseminateJitaBuyMaxValues();
             WriteToCSV();
@@ -118,10 +118,7 @@ namespace cs_EVE_Assets_Value_Calculator
                     sb.Clear();
                 }
             }
-            catch (Exception)
-            {
-
-            }
+            catch (Exception) { }
 
             while (_accountendpointresponses.Count != _eveaccounts.Count) Thread.Sleep(1);
         }
@@ -152,10 +149,7 @@ namespace cs_EVE_Assets_Value_Calculator
                     }
                 }
             }
-            catch (Exception)
-            {
-
-            }
+            catch (Exception) { }
 
             while (_assets.Count != _totalcharacters) Thread.Sleep(1);
         }
@@ -185,10 +179,7 @@ namespace cs_EVE_Assets_Value_Calculator
                     }
                 }
             }
-            catch (Exception)
-            {
-
-            }
+            catch (Exception) { }
 
             while (_accountbalanceresponses.Count != _totalcharacters) Thread.Sleep(1);
         }
@@ -220,10 +211,7 @@ namespace cs_EVE_Assets_Value_Calculator
                     }
                 }
             }
-            catch (Exception)
-            {
-
-            }
+            catch (Exception) { }
 
             while (_marketorderendpointresponses.Count != _totalcharacters) Thread.Sleep(1);
         }
@@ -301,22 +289,26 @@ namespace cs_EVE_Assets_Value_Calculator
             while (_contractitems.Count != requests) Thread.Sleep(1);
         }
 
-        private void GetUniqueItemValuesFromJitaBuyMax()
+        private void GetItemValuesFromEVECentral()
         {
             List<string> uris = AssembleURIs();
             Display("Retrieving price data from EVE-Central.");
             int requests = uris.Count;
             System.Net.WebClient[] w = new System.Net.WebClient[requests];
 
-            for (int i = 0; i < requests; ++i)
+            try
             {
-                w[i] = new System.Net.WebClient();
-                w[i].Proxy = null;
-                w[i].DownloadStringCompleted += w_EVECentralResponse;
-                w[i].Headers.Add("Program", "EVE-Asset-Value-v1");
-                w[i].Headers.Add("Contact", "garrett.bates@outlook.com");
-                w[i].DownloadStringAsync(new Uri(uris[i]));
+                for (int i = 0; i < requests; ++i)
+                {
+                    w[i] = new System.Net.WebClient();
+                    w[i].Proxy = null;
+                    w[i].DownloadStringCompleted += w_EVECentralResponse;
+                    w[i].Headers.Add("Program", "EVE-Asset-Value-v1");
+                    w[i].Headers.Add("Contact", "garrett.bates@outlook.com");
+                    w[i].DownloadStringAsync(new Uri(uris[i]));
+                }
             }
+            catch (Exception) { }
 
             while (_evecentralresponses.Count != requests) Thread.Sleep(1);
         }
@@ -545,6 +537,7 @@ namespace cs_EVE_Assets_Value_Calculator
 
         private void WriteToCSV()
         {
+            Display("Writing to CSV.");
             StringBuilder sb = new StringBuilder();
             decimal totalvalue = 0M;
 
@@ -576,6 +569,7 @@ namespace cs_EVE_Assets_Value_Calculator
 
         private void DisseminateJitaBuyMaxValues()
         {
+            Display("Applying item values to characters.");
             // on a per-character basis
             foreach (Account a in _eveaccounts)
             {
@@ -588,6 +582,7 @@ namespace cs_EVE_Assets_Value_Calculator
 
         private void ProcessEVECentralMarketStatResponses()
         {
+            Display("Parsing item values.");
             foreach (XmlDocument d in _evecentralresponses)
             {
                 foreach (XmlNode n in d.SelectNodes("/evec_api/marketstat/type"))
