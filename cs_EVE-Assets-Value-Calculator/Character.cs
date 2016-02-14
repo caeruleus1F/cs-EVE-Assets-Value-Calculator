@@ -10,9 +10,6 @@ namespace cs_EVE_Assets_Value_Calculator
     class Character
     {
         SortedDictionary<string, int> _assetsandcount = new SortedDictionary<string, int>();
-        XmlDocument _assetsxml = null;
-        XmlDocument _contractitemsxml = null;
-        XmlDocument _marketordersxml = null;
         decimal _assetsvalue = 0M;
         decimal _isk = 0M;
         string _name = null;
@@ -32,10 +29,8 @@ namespace cs_EVE_Assets_Value_Calculator
         public XmlDocument AssetsXML
         {
             set 
-            { 
-                _assetsxml = value;
-
-                foreach (XmlNode n in _assetsxml.SelectNodes("/eveapi/result/rowset/row"))
+            {
+                foreach (XmlNode n in value.SelectNodes("/eveapi/result/rowset/row"))
                 {
                     FillDictionary(n, _assetsandcount);
                 }
@@ -46,9 +41,7 @@ namespace cs_EVE_Assets_Value_Calculator
         {
             set 
             { 
-                _contractitemsxml = value;
-
-                foreach (XmlNode n in _contractitemsxml.SelectNodes("/eveapi/result/rowset/row"))
+                foreach (XmlNode n in value.SelectNodes("/eveapi/result/rowset/row"))
                 {
                     FillDictionary(n, _assetsandcount);
                 }
@@ -58,10 +51,8 @@ namespace cs_EVE_Assets_Value_Calculator
         public XmlDocument MarketOrdersXML
         {
             set 
-            { 
-                _marketordersxml = value;
-
-                foreach (XmlNode n in _marketordersxml.SelectNodes("/eveapi/result/rowset/row"))
+            {
+                foreach (XmlNode n in value.SelectNodes("/eveapi/result/rowset/row"))
                 {
                     if (n.Attributes["bid"].Value.Equals("0")) // sell orders
                     {
@@ -100,8 +91,6 @@ namespace cs_EVE_Assets_Value_Calculator
 
         public void ProcessItemValues(SortedDictionary<string, decimal> jitavalue)
         {
-
-
             foreach (var item in _assetsandcount)
             {
                 _assetsvalue += item.Value * jitavalue[item.Key];

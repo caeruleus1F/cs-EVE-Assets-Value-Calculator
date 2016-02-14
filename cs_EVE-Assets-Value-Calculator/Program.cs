@@ -35,7 +35,6 @@ namespace cs_EVE_Assets_Value_Calculator
         string _contractitemsendpoint = "/char/ContractItems.xml.aspx";
         List<XmlDocument> _contractheaders = new List<XmlDocument>();
         List<XmlDocument> _contractitems = new List<XmlDocument>();
-        Dictionary<string, string> _qualifyingheaders = new Dictionary<string, string>();
 
         // market endpoint
         string _marketordersendpoint = "/char/MarketOrders.xml.aspx";
@@ -47,37 +46,34 @@ namespace cs_EVE_Assets_Value_Calculator
         SortedDictionary<string, decimal> _uniqueitemvalues = new SortedDictionary<string, decimal>();
 
         public volatile static bool _continue = true;
-        public static DateTime _lastattempt;
+        public DateTime _lastattempt;
+        System.Timers.Timer _timer = new System.Timers.Timer();
 
 
         static void Main(string[] args)
         {
             Console.Title = "EVE Networth";
             Console.WindowWidth = 30;
-            Console.WindowHeight = 3;
-            Start();
-            System.Timers.Timer timer = new System.Timers.Timer();
-            timer.Interval = 60 * 60 * 1000; // ~1 hours
-            timer.Elapsed += timer_Elapsed;
-            timer.Start();
+            Console.WindowHeight = 6;
 
-            while (_continue) Thread.Sleep(1);
-        }
-
-        static void Start()
-        {
-            _lastattempt = DateTime.Now;
             Thread t = new Thread(new Program().Begin);
             t.IsBackground = true;
             t.Start();
             t.Join();
 
-            Console.Clear();
-            Console.WriteLine("Data retrieved.\nNext pull at {0}", _lastattempt.AddHours(1).ToLongTimeString());
+            while (_continue) Thread.Sleep(1);
+        }
+
+        public Program()
+        {
+            _timer.Interval = 60 * 60 * 1000; // ~1 hours
+            _timer.Elapsed += timer_Elapsed;
+            _timer.Start();
         }
 
         public void Begin()
         {
+            _lastattempt = DateTime.Now;
             HardcodeAccountInfo();
             GetAccountXML();
             GetTotalCharacters();
@@ -91,6 +87,7 @@ namespace cs_EVE_Assets_Value_Calculator
             GetItemValuesFromEVECentral();
             ProcessEVECentralMarketStatResponses();
             DisseminateJitaBuyMaxValues();
+            DisplayAccountsWorthToConsole();
             WriteToCSV();
         }
 
@@ -120,7 +117,12 @@ namespace cs_EVE_Assets_Value_Calculator
             }
             catch (Exception) { }
 
-            while (_accountendpointresponses.Count != _eveaccounts.Count) Thread.Sleep(1);
+            while (_accountendpointresponses.Count != _eveaccounts.Count)
+            {
+                Console.Clear();
+                Console.WriteLine("Retrieving characters {0} of {1}.", _accountendpointresponses.Count, _eveaccounts.Count);
+                Thread.Sleep(1);
+            }
         }
 
         private void GetCharacterAssets()
@@ -151,7 +153,12 @@ namespace cs_EVE_Assets_Value_Calculator
             }
             catch (Exception) { }
 
-            while (_assets.Count != _totalcharacters) Thread.Sleep(1);
+            while (_assets.Count != _totalcharacters)
+            {
+                Console.Clear();
+                Console.WriteLine("Retrieving character assets {0} of {1}.", _assets.Count, _totalcharacters);
+                Thread.Sleep(1);
+            }
         }
 
         private void GetAccountBalances()
@@ -181,7 +188,12 @@ namespace cs_EVE_Assets_Value_Calculator
             }
             catch (Exception) { }
 
-            while (_accountbalanceresponses.Count != _totalcharacters) Thread.Sleep(1);
+            while (_accountbalanceresponses.Count != _totalcharacters)
+            {
+                Console.Clear();
+                Console.WriteLine("Retrieving account balances {0} of {1}.", _accountbalanceresponses.Count, _totalcharacters);
+                Thread.Sleep(1);
+            }
         }
 
         private void GetMarketOrders()
@@ -213,7 +225,12 @@ namespace cs_EVE_Assets_Value_Calculator
             }
             catch (Exception) { }
 
-            while (_marketorderendpointresponses.Count != _totalcharacters) Thread.Sleep(1);
+            while (_marketorderendpointresponses.Count != _totalcharacters)
+            {
+                Console.Clear();
+                Console.WriteLine("Retrieving market orders {0} of {1}.", _marketorderendpointresponses.Count, _totalcharacters);
+                Thread.Sleep(1);
+            }
         }
 
         private void GetContractHeaders()
@@ -244,13 +261,33 @@ namespace cs_EVE_Assets_Value_Calculator
             }
             catch (Exception) { }
 
-            while (_contractheaders.Count != _totalcharacters) Thread.Sleep(1);
+            while (_contractheaders.Count != _totalcharacters)
+            {
+                Console.Clear();
+                Console.WriteLine("Retrieving contract headers {0} of {1}.", _contractheaders.Count, _totalcharacters);
+                Thread.Sleep(1);
+            }
         }
 
         private void GetContractContents()
         {
             Display("Retrieving contract items.");
-            int requests = _qualifyingheaders.Count;
+            List<string> issuersandcontractheaders = new List<string>();
+            foreach (XmlDocument x in _contractheaders)
+            {
+                //x.Save("contractheader" + doccount++ + ".xml");
+                foreach (XmlNode n in x.SelectNodes("/eveapi/result/rowset/row"))
+                {
+                    if (n.Attributes["status"].Value.Equals("Outstanding"))
+                    {
+                        string issuer = n.Attributes["issuerID"].Value;
+                        string contractid = n.Attributes["contractID"].Value;
+                        issuersandcontractheaders.Add(issuer + "," + contractid);
+                    }
+                }
+            }
+            int requests = issuersandcontractheaders.Count;
+
             try
             {
                 if (requests > 0)
@@ -259,20 +296,20 @@ namespace cs_EVE_Assets_Value_Calculator
                     CCPAPIInterfacer[] w = new CCPAPIInterfacer[requests];
 
                     int count = 0;
-                    foreach (var item in _qualifyingheaders)
+                    foreach (var item in issuersandcontractheaders)
                     {
                         foreach (Account a in _eveaccounts)
                         {
                             foreach (Character c in a)
                             {
-                                if (item.Key.Equals(c.CharacterID))
+                                if (item.Split(',')[0].Equals(c.CharacterID))
                                 {
                                     w[count] = new CCPAPIInterfacer(c);
                                     sb.Append(_baseurl).Append(_contractitemsendpoint)
                                         .Append("?keyid=").Append(a.KeyID)
                                         .Append("&vcode=").Append(a.VCode)
                                         .Append("&characterid=").Append(c.CharacterID)
-                                        .Append("&contractid=").Append(item.Value);
+                                        .Append("&contractid=").Append(item.Split(',')[1]);
                                     w[count].AssociatedCharacter = c;
                                     w[count].DownloadStringCompleted += w_ContractItemsEndpointResponse;
                                     w[count].DownloadStringAsync(new Uri(sb.ToString()));
@@ -286,31 +323,38 @@ namespace cs_EVE_Assets_Value_Calculator
             }
             catch (Exception) { }
 
-            while (_contractitems.Count != requests) Thread.Sleep(1);
+            while (_contractitems.Count != requests)
+            {
+                Console.Clear();
+                Console.WriteLine("Retrieving contract items {0} of {1}.", _contractitems.Count, requests);
+                Thread.Sleep(1);
+            }
         }
 
         private void GetItemValuesFromEVECentral()
         {
             List<string> uris = AssembleURIs();
-            Display("Retrieving price data from EVE-Central.");
+            Display("Retrieving EVE-C prices.");
             int requests = uris.Count;
-            System.Net.WebClient[] w = new System.Net.WebClient[requests];
+            EVECentralInterfacer[] w = new EVECentralInterfacer[requests];
 
             try
             {
                 for (int i = 0; i < requests; ++i)
                 {
-                    w[i] = new System.Net.WebClient();
-                    w[i].Proxy = null;
+                    w[i] = new EVECentralInterfacer();
                     w[i].DownloadStringCompleted += w_EVECentralResponse;
-                    w[i].Headers.Add("Program", "EVE-Asset-Value-v1");
-                    w[i].Headers.Add("Contact", "garrett.bates@outlook.com");
                     w[i].DownloadStringAsync(new Uri(uris[i]));
                 }
             }
             catch (Exception) { }
 
-            while (_evecentralresponses.Count != requests) Thread.Sleep(1);
+            while (_evecentralresponses.Count != requests)
+            {
+                Console.Clear();
+                Console.WriteLine("Retrieving EVE-C prices {0} of {1}.", _evecentralresponses.Count, requests);
+                Thread.Sleep(1);
+            }
         }
 
         /***********************************************************************
@@ -319,9 +363,9 @@ namespace cs_EVE_Assets_Value_Calculator
          * 
          ***********************************************************************/
 
-        static void timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
+        private void timer_Elapsed(object sender, System.Timers.ElapsedEventArgs e)
         {
-            Start();
+            Begin();
         }
 
         private void w_AccountEndpointResponse(object sender, DownloadStringCompletedEventArgs e)
@@ -330,15 +374,13 @@ namespace cs_EVE_Assets_Value_Calculator
             {
                 XmlDocument x = new XmlDocument();
                 x.LoadXml(e.Result);
-                lock (new object())
+
+                AddXMLToCollection(x, _accountendpointresponses);
+                foreach (XmlNode node in x.SelectNodes("/eveapi/result/rowset/row"))
                 {
-                    AddXMLToCollection(x, _accountendpointresponses);
-                    foreach (XmlNode node in x.SelectNodes("/eveapi/result/rowset/row"))
-                    {
-                        string name = node.Attributes[0].Value;
-                        string charid = node.Attributes[1].Value;
-                        ((CCPAPIInterfacer)(sender)).AssociatedAccount.Add(new Character(name, charid));
-                    }
+                    string name = node.Attributes[0].Value;
+                    string charid = node.Attributes[1].Value;
+                    ((CCPAPIInterfacer)(sender)).AssociatedAccount.Add(new Character(name, charid));
                 }
             }
             catch (Exception)
@@ -402,17 +444,6 @@ namespace cs_EVE_Assets_Value_Calculator
             {
                 xmldoc.LoadXml(e.Result);
                 AddXMLToCollection(xmldoc, _contractheaders);
-                DateTime d;
-                foreach (XmlNode n in xmldoc.SelectNodes("/eveapi/result/rowset/row"))
-                {
-                    if (DateTime.TryParse(n.Attributes["dateCompleted"].Value, out d) == false)
-                    {
-                        lock (new object())
-                        {
-                            _qualifyingheaders.Add(n.Attributes["issuerID"].Value, n.Attributes["contractID"].Value);
-                        }
-                    }
-                }
             }
             catch (Exception) { }
         }
@@ -424,10 +455,11 @@ namespace cs_EVE_Assets_Value_Calculator
             try
             {
                 xmldoc.LoadXml(e.Result);
+                //xmldoc.Save("contractitems" + DateTime.Now.Millisecond + ".xml");
                 AddXMLToCollection(xmldoc, _contractitems);
                 ((CCPAPIInterfacer)(sender)).AssociatedCharacter.ContractItemsXML = xmldoc;
             }
-            catch (Exception) { }
+            catch (Exception) { _contractitems.Add(new XmlDocument()); }
         }
 
         private void w_EVECentralResponse(object sender, DownloadStringCompletedEventArgs e)
@@ -458,7 +490,7 @@ namespace cs_EVE_Assets_Value_Calculator
 
         private void HardcodeAccountInfo()
         {
-            using (StreamReader r = new StreamReader("eve_apikeys.txt"))
+            using (StreamReader r = new StreamReader("/shared/Data Gathering/eve_apikeys.txt"))
             {
                 string[] lines = r.ReadToEnd().Split('\r');
                 
@@ -475,6 +507,7 @@ namespace cs_EVE_Assets_Value_Calculator
 
         private void GetTotalCharacters()
         {
+            _totalcharacters = 0;
             foreach (Account a in _eveaccounts)
             {
                 foreach (Character c in a)
@@ -529,15 +562,38 @@ namespace cs_EVE_Assets_Value_Calculator
             _accountbalanceresponses.Clear();
             _contractheaders.Clear();
             _contractitems.Clear();
-            _qualifyingheaders.Clear();
             _marketorderendpointresponses.Clear();
             _evecentralresponses.Clear();
             _uniqueitemvalues.Clear();
         }
 
+        private void DisplayAccountsWorthToConsole()
+        {
+            StringBuilder sb = new StringBuilder();
+            int acct = 1;
+            decimal totalworth = 0M;
+
+            foreach (Account a in _eveaccounts)
+            {
+                decimal accttotal = 0M;
+                foreach (Character c in a)
+                {
+                    accttotal += c.AssetsValue + c.ISK;
+                }
+                totalworth += accttotal;
+                sb.Append("Account ").Append(acct).Append(": ").Append(accttotal.ToString("N2")).Append(Environment.NewLine);
+                ++acct;
+            }
+
+            sb.Append("Total: ").Append(totalworth.ToString("N2")).Append(Environment.NewLine);
+
+            string time = _lastattempt.AddHours(1).ToLongTimeString();
+            Console.Clear();
+            Console.WriteLine("{0}Next pull at {1}", sb.ToString(), time);
+        }
+
         private void WriteToCSV()
         {
-            Display("Writing to CSV.");
             StringBuilder sb = new StringBuilder();
             decimal totalvalue = 0M;
 
@@ -560,7 +616,7 @@ namespace cs_EVE_Assets_Value_Calculator
 
             sb.Append(totalvalue.ToString());
 
-            using (StreamWriter w = new StreamWriter("eve_networth.csv", true))
+            using (StreamWriter w = new StreamWriter("/shared/Data Gathering/eve_networth.csv", true))
             {
                 w.WriteLine(sb.ToString());
                 w.Close();
@@ -632,7 +688,10 @@ namespace cs_EVE_Assets_Value_Calculator
             {
                 foreach (XmlNode n in x.SelectNodes("/eveapi/result/rowset/row"))
                 {
-                    FillDictionary(n, _uniqueassets);
+                    if (n.Attributes["included"].Value.Equals("1"))
+                    {
+                        FillDictionary(n, _uniqueassets);
+                    }
                 }
             }
 

@@ -29,12 +29,21 @@ namespace cs_EVE_Assets_Value_Calculator
             Initialize();
         }
 
+        protected override WebRequest GetWebRequest(Uri address)
+        {
+            HttpWebRequest request = (HttpWebRequest)base.GetWebRequest(address);
+            request.AutomaticDecompression = DecompressionMethods.GZip
+                     | DecompressionMethods.Deflate;
+            return request;
+        }
+
         private void Initialize()
         {
             this.Proxy = null;
             this.Headers.Add("User-Agent", "EVE-Asset-Value-Calculator");
             this.Headers.Add("Contact", "garrett.bates@outlook.com");
             this.Headers.Add("IGN", "Thirtyone Organism");
+            this.Headers.Add("Accept-Encoding", "gzip");
         }
 
         public Account AssociatedAccount
