@@ -54,24 +54,27 @@ namespace cs_EVE_Assets_Value_Calculator
             {
                 foreach (XmlNode n in value.SelectNodes("/eveapi/result/rowset/row"))
                 {
-                    if (n.Attributes["bid"].Value.Equals("0")) // sell orders
+                    if (n.Attributes["orderState"].Value.Equals("0"))
                     {
-                        string typeid = n.Attributes["typeID"].Value;
-                        string volremaining = n.Attributes["volRemaining"].Value;
+                        if (n.Attributes["bid"].Value.Equals("0")) // sell orders
+                        {
+                            string typeid = n.Attributes["typeID"].Value;
+                            string volremaining = n.Attributes["volRemaining"].Value;
 
-                        if (_assetsandcount.ContainsKey(typeid))
-                        {
-                            _assetsandcount[typeid] += Convert.ToInt32(volremaining);
+                            if (_assetsandcount.ContainsKey(typeid))
+                            {
+                                _assetsandcount[typeid] += Convert.ToInt32(volremaining);
+                            }
+                            else
+                            {
+                                _assetsandcount.Add(typeid, Convert.ToInt32(volremaining));
+                            }
                         }
-                        else
+                        else // buy orders
                         {
-                            _assetsandcount.Add(typeid, Convert.ToInt32(volremaining));
+                            decimal isk = Convert.ToDecimal(n.Attributes["escrow"].Value);
+                            _isk += isk;
                         }
-                    }
-                    else // buy orders
-                    {
-                        decimal isk = Convert.ToDecimal(n.Attributes["escrow"].Value);
-                        _isk += isk;
                     }
                 }
             }
